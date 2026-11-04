@@ -156,7 +156,7 @@ class _AuthPageState extends State<AuthPage> {
               if (_signup) ...[
                 TextField(controller: _name, decoration: const InputDecoration(labelText: 'الاسم الظاهر', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder())),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(value: _role, decoration: const InputDecoration(labelText: 'نوع الحساب', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'reader', child: Text('قارئ')), DropdownMenuItem(value: 'writer', child: Text('كاتب'))], onChanged: (v) => setState(() => _role = v ?? 'reader')),
+                DropdownButtonFormField<String>(initialValue: _role, decoration: const InputDecoration(labelText: 'نوع الحساب', border: OutlineInputBorder()), items: const [DropdownMenuItem(value: 'reader', child: Text('قارئ')), DropdownMenuItem(value: 'writer', child: Text('كاتب'))], onChanged: (v) => setState(() => _role = v ?? 'reader')),
                 const SizedBox(height: 8),
                 const Align(alignment: Alignment.centerRight, child: Text('عضوية اللجنة تتطلب دعوة وموافقة الإدارة ولا يمكن اختيارها ذاتياً.', style: TextStyle(fontSize: 12, color: Colors.white60))),
                 const SizedBox(height: 12),
@@ -289,7 +289,7 @@ class _CommitteeRequestButtonState extends State<CommitteeRequestButton> {
     final accepted = await showDialog<bool>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
       title: const Text('طلب الانضمام إلى لجنة النشر'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        DropdownButtonFormField<String>(value: requestedRole, decoration: const InputDecoration(labelText: 'التخصص'), items: const [
+        DropdownButtonFormField<String>(initialValue: requestedRole, decoration: const InputDecoration(labelText: 'التخصص'), items: const [
           DropdownMenuItem(value: 'proofreader', child: Text('مدقق لغوي')),
           DropdownMenuItem(value: 'critic', child: Text('ناقد أدبي')),
           DropdownMenuItem(value: 'editor', child: Text('محرر أدبي')),
