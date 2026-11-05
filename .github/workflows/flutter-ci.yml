@@ -32,6 +32,100 @@ jobs:
         working-directory: flutter_app
         run: flutter create --platforms=android,ios --org com.kawn.library .
 
+      - name: Configure and validate Android network permissions and deep links
+        working-directory: flutter_app
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          if not manifest.exists():
+              raise SystemExit(f"Android manifest not found: {manifest}")
+
+          ANDROID = "http://schemas.android.com/apk/res/android"
+          ET.register_namespace("android", ANDROID)
+          tree = ET.parse(manifest)
+          root = tree.getroot()
+
+          internet_name = "android.permission.INTERNET"
+          has_internet = any(
+              node.tag == "uses-permission"
+              and node.get(f"{{{ANDROID}}}name") == internet_name
+              for node in root
+          )
+          if not has_internet:
+              permission = ET.Element("uses-permission")
+              permission.set(f"{{{ANDROID}}}name", internet_name)
+              application = root.find("application")
+              if application is not None:
+                  root.insert(list(root).index(application), permission)
+              else:
+                  root.append(permission)
+
+          application = root.find("application")
+          if application is None:
+              raise SystemExit("Android manifest has no <application> element")
+
+          activity = None
+          for candidate in application.findall("activity"):
+              name = candidate.get(f"{{{ANDROID}}}name", "")
+              if name.endswith("MainActivity"):
+                  activity = candidate
+                  break
+          if activity is None:
+              raise SystemExit("Could not find MainActivity in AndroidManifest.xml")
+
+          scheme = "com.kawn.library"
+          host = "login-callback"
+          has_callback = False
+          for intent in activity.findall("intent-filter"):
+              actions = {
+                  item.get(f"{{{ANDROID}}}name")
+                  for item in intent.findall("action")
+              }
+              categories = {
+                  item.get(f"{{{ANDROID}}}name")
+                  for item in intent.findall("category")
+              }
+              for data in intent.findall("data"):
+                  if (
+                      data.get(f"{{{ANDROID}}}scheme") == scheme
+                      and data.get(f"{{{ANDROID}}}host") == host
+                      and "android.intent.action.VIEW" in actions
+                      and "android.intent.category.BROWSABLE" in categories
+                  ):
+                      has_callback = True
+
+          if not has_callback:
+              intent = ET.SubElement(activity, "intent-filter")
+              ET.SubElement(intent, "action", {
+                  f"{{{ANDROID}}}name": "android.intent.action.VIEW"
+              })
+              ET.SubElement(intent, "category", {
+                  f"{{{ANDROID}}}name": "android.intent.category.DEFAULT"
+              })
+              ET.SubElement(intent, "category", {
+                  f"{{{ANDROID}}}name": "android.intent.category.BROWSABLE"
+              })
+              ET.SubElement(intent, "data", {
+                  f"{{{ANDROID}}}scheme": scheme,
+                  f"{{{ANDROID}}}host": host
+              })
+
+          tree.write(manifest, encoding="utf-8", xml_declaration=True)
+
+          # Re-parse the written file and fail CI if a required entry is missing.
+          checked = ET.parse(manifest).getroot()
+          assert any(
+              node.tag == "uses-permission"
+              and node.get(f"{{{ANDROID}}}name") == internet_name
+              for node in checked
+          ), "INTERNET permission was not written"
+          print("Android manifest validated: INTERNET permission and login callback configured.")
+          PY
+
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
@@ -47,6 +141,30 @@ jobs:
       - name: Run Flutter Tests
         working-directory: flutter_app
         run: flutter test
+
+      - name: Validate Supabase build configuration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ]; then
+            echo "::error::GitHub Actions secret SUPABASE_URL is missing."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::GitHub Actions secret SUPABASE_ANON_KEY is missing."
+            exit 1
+          fi
+          case "$SUPABASE_URL" in
+            https://*.supabase.co) ;;
+            *)
+              echo "::error::SUPABASE_URL must be the HTTPS URL of your Supabase project."
+              exit 1
+              ;;
+          esac
+          echo "Supabase build variables are present (values are not printed)."
+
       - name: Build Android APK
         working-directory: flutter_app
         env:
